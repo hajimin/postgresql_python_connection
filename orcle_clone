@@ -1,0 +1,39 @@
+import pymysql
+import pandas as pd
+from sqlalchemy import create_engine, event
+from datetime import datetime
+import cx_Oracle
+
+OracleEngine = create_engine("oracle+cx_oracle://dams:admin@192.168.111.143/sn001")
+PostgreEngine = create_engine("postgresql://postgres:postgres@192.168.111.143/orcl_clone")
+
+table_list = ['dt102','dt102_combine']
+df = []
+for table_name in table_list:
+    rv = pd.read_sql_query("select max(time_stemp) as time_stemp from %s" % table_name, PostgreEngine) 
+    last_ts=''
+    if rv.iloc[0]['time_stemp'] != None:
+        last_ts = rv.iloc[0]['time_stemp']
+        dt102_df = pd.read_sql_query("""
+            SELECT *
+            FROM %s 
+            WHERE TIME_STEMP > last_ts
+            AND TIME_STEMP < (SELECT to_char(to_date(SUBSTR( %(last_ts)s ,1,14),'YYYY-MM-DD HH24:MI:SS') - (interval '1' MINUTE),'YYYYMMDDHH24MISS')  max_ts FROM dual)
+        """ % table_name, OracleEngine,params={'last_dtct':last_ts})
+    else:
+        dt102_df = pd.read_sql_query("""
+            WITH datetime AS (
+            SELECT to_char(min.min_ts,'YYYYMMDDHH24MISS') AS min_ts ,to_char(min.min_ts + (interval '10' MINUTE), 'YYYYMMDDHH24MISS') AS max_ts
+            FROM 
+             ( SELECT  to_date(SUBSTR( min(TIME_STEMP),1,14),'YYYY-MM-DD HH24:MI:SS') - (interval '1' MINUTE) min_ts
+              FROM dt102) min )
+            SELECT *
+            FROM %s 
+            WHERE TIME_STEMP > (SELECT min_ts FROM datetime)
+            AND TIME_STEMP <= (SELECT max_ts FROM datetime)
+        """ % table_name, OracleEngine)
+    
+    dt102_df["time_stemp"] = dt102_df['time_stemp'].apply(lambda s: f'{s[:4]}-{s[4:6]}-{s[6:8]} {s[8:10]}:{s[10:12]}:{s[12:14]}.{s[14:17]}')
+    dt102_df["time_stemp"] = pd.to_datetime(dt102_df["time_stemp"])
+
+    print(dt102_df)
