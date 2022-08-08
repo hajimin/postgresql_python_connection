@@ -9,8 +9,8 @@ $$
     from datetime import datetime
     import cx_Oracle
 
-    OracleEngine = create_engine("oracle+cx_oracle://dams:admin@192.168.111.143/sn001")
-    PostgreEngine = create_engine("postgresql://postgres:postgres@192.168.111.143/orcl_clone")
+    OracleEngine = create_engine("oracle+cx_oracle://id:pw@localhost/name")
+    PostgreEngine = create_engine("postgresql://id:pw@localhost/name")
 
     table_list = ['dt102','dt102_combine']
     df = []
